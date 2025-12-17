@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Responsible AI Simulator</title>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; }
+    header { padding: 18px 22px; border-bottom: 1px solid #eee; }
+    main { padding: 18px 22px; }
+    .grid { display: grid; grid-template-columns: 360px 1fr; gap: 18px; align-items: start; }
+    .card { border: 1px solid #eee; border-radius: 14px; padding: 14px; }
+    .card h3 { margin: 0 0 10px 0; font-size: 16px; }
+    label { display:block; font-size: 13px; margin-top: 10px; }
+    input[type="range"] { width: 100%; }
+    .small { color: #555; font-size: 13px; line-height: 1.35; }
+    .pill { display:inline-block; padding: 6px 10px; border-radius: 999px; border: 1px solid #ddd; font-size: 13px; }
+    nav a { margin-right: 12px; font-size: 14px; color: #0b57d0; text-decoration: none; }
+    nav a:hover { text-decoration: underline; }
+    .charts { display: grid; grid-template-columns: 1fr; gap: 14px; }
+    footer { padding: 14px 22px; border-top: 1px solid #eee; color:#666; font-size: 12px; }
+    @media (max-width: 920px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<header>
+  <h1 style="margin:0;font-size:20px;">🧭 Responsible AI in Learning & Teaching</h1>
+  <div class="small">Self-guided simulator (illustrative trade-offs; not a real ML model).</div>
+  <nav style="margin-top:10px;">
+    <a href="index.html">Simulator</a>
+    <a href="students.html">Students</a>
+    <a href="faculty.html">Faculty</a>
+    <a href="templates.html">Templates</a>
+  </nav>
+</header>
+
+<main>
+  <div class="grid">
+    <section class="card">
+      <h3>🎛️ Controls</h3>
+      <div class="small">Adjust decisions (not technical parameters) and watch outcomes change.</div>
+
+      <label>Automation level: <span id="vA"></span></label>
+      <input id="automation" type="range" min="0" max="100" value="60"/>
+
+      <label>Verification & human review: <span id="vV"></span></label>
+      <input id="verification" type="range" min="0" max="100" value="65"/>
+
+      <label>Transparency & disclosure: <span id="vT"></span></label>
+      <input id="transparency" type="range" min="0" max="100" value="70"/>
+
+      <label>Accessibility & inclusive design: <span id="vX"></span></label>
+      <input id="accessibility" type="range" min="0" max="100" value="75"/>
+
+      <hr style="border:none;border-top:1px solid #eee;margin:14px 0;"/>
+
+      <label>Decision stakes (grades/opportunity): <span id="vS"></span></label>
+      <input id="stakes" type="range" min="0" max="100" value="60"/>
+
+      <label>Data sensitivity (privacy risk): <span id="vD"></span></label>
+      <input id="dataSensitivity" type="range" min="0" max="100" value="50"/>
+
+      <label>Hallucination likelihood (wrong info risk): <span id="vH"></span></label>
+      <input id="hallucination" type="range" min="0" max="100" value="35"/>
+
+      <div style="margin-top:14px;">
+        <div class="pill">Overall ethical risk: <strong id="riskScore"></strong> / 100</div>
+        <div class="small" style="margin-top:8px;">Risk level: <strong id="riskLabel"></strong></div>
+      </div>
+
+      <div class="small" style="margin-top:12px;">
+        <strong>What to notice:</strong><br/>
+        • Automation ↑ often increases speed <em>and</em> risk<br/>
+        • Verification ↑ reduces risk and increases trust<br/>
+        • Transparency ↑ reduces misuse and confusion<br/>
+        • Accessibility ↑ reduces exclusion and gaps
+      </div>
+    </section>
+
+    <section class="charts">
+      <div class="card">
+        <h3>Trade-offs (higher is better)</h3>
+        <div id="tradeoffChart" style="height:320px;"></div>
+      </div>
+
+      <div class="card">
+        <h3>Risk indicators (higher is worse)</h3>
+        <div id="riskChart" style="height:280px;"></div>
+      </div>
+
+      <div class="card">
+        <h3>Differential impact view (illustrative)</h3>
+        <div class="small">This is not real data—it's a discussion prompt showing how gaps can widen when accessibility/verification are low.</div>
+        <div id="groupChart" style="height:280px;"></div>
+      </div>
+
+      <div class="card">
+        <h3>Reflection prompts</h3>
+        <div class="small">
+          <strong>Students:</strong> Which slider change most improved learning quality—and why?<br/>
+          <strong>Faculty:</strong> If stakes are high, which safeguards are non-negotiable?
+        </div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<footer>
+  Disclaimer: This simulator illustrates ethical trade-offs. Scores are illustrative—not measurements.
+</footer>
+
+<script>
+  function clamp01(x){ return Math.max(0, Math.min(1, x)); }
+
+  function riskLabel(r){
+    if (r >= 70) return "🔴 High";
+    if (r >= 40) return "🟡 Medium";
+    return "🟢 Low";
+  }
+
+  function computeScores(params){
+    const A = params.automation/100, T = params.transparency/100, V = params.verification/100,
+          X = params.accessibility/100, S = params.stakes/100, D = params.dataSensitivity/100,
+          H = params.hallucination/100;
+
+    const efficiency = clamp01(0.15 + 0.95*A);
+    const consistency = clamp01(0.35 + 0.35*A + 0.30*V - 0.20*H);
+
+    const learningQuality = clamp01(0.25 + 0.35*V + 0.20*T + 0.20*X - 0.25*A + 0.10*(1-H));
+    const accessibilityScore = clamp01(0.20 + 0.80*X);
+    const fairness = clamp01(0.25 + 0.35*V + 0.20*T + 0.20*X - 0.15*A - 0.10*H);
+    const trust = clamp01(0.20 + 0.45*T + 0.30*V + 0.10*X - 0.20*S*(1-T));
+
+    const biasRisk = clamp01(0.15 + 0.35*A + 0.20*(1-X) + 0.20*(1-V) + 0.10*H + 0.10*S);
+    const privacyRisk = clamp01(0.10 + 0.55*D + 0.15*A + 0.10*(1-T) + 0.10*S);
+    const reliabilityRisk = clamp01(0.10 + 0.40*H + 0.25*(1-V) + 0.15*A + 0.10*S);
+
+    const ethicalRisk = 100*clamp01(0.34*biasRisk + 0.33*privacyRisk + 0.33*reliabilityRisk);
+
+    // Differential impact view (illustrative)
+    const base = clamp01(0.55 + 0.20*V + 0.10*T - 0.15*A + 0.10*X);
+    const gap = clamp01(0.18*(1-X) + 0.12*(1-V) + 0.06*A);
+    const groupA = clamp01(base + 0.03);
+    const groupB = clamp01(base - gap/2);
+    const groupC = clamp01(base - gap);
+
+    return {
+      positives: [
+        ["Learning quality", learningQuality],
+        ["Trust", trust],
+        ["Fairness (proxy)", fairness],
+        ["Accessibility", accessibilityScore],
+        ["Efficiency", efficiency],
+        ["Consistency", consistency]
+      ],
+      risks: [
+        ["Bias risk", biasRisk],
+        ["Privacy risk", privacyRisk],
+        ["Reliability risk", reliabilityRisk]
+      ],
+      ethicalRisk,
+      groups: [
+        ["Group A", groupA],
+        ["Group B", groupB],
+        ["Group C", groupC]
+      ]
+    };
+  }
+
+  const els = {
+    automation: document.getElementById("automation"),
+    verification: document.getElementById("verification"),
+    transparency: document.getElementById("transparency"),
+    accessibility: document.getElementById("accessibility"),
+    stakes: document.getElementById("stakes"),
+    dataSensitivity: document.getElementById("dataSensitivity"),
+    hallucination: document.getElementById("hallucination"),
+    vA: document.getElementById("vA"),
+    vV: document.getElementById("vV"),
+    vT: document.getElementById("vT"),
+    vX: document.getElementById("vX"),
+    vS: document.getElementById("vS"),
+    vD: document.getElementById("vD"),
+    vH: document.getElementById("vH"),
+    riskScore: document.getElementById("riskScore"),
+    riskLabel: document.getElementById("riskLabel")
+  };
+
+  function readParams(){
+    return {
+      automation: +els.automation.value,
+      verification: +els.verification.value,
+      transparency: +els.transparency.value,
+      accessibility: +els.accessibility.value,
+      stakes: +els.stakes.value,
+      dataSensitivity: +els.dataSensitivity.value,
+      hallucination: +els.hallucination.value
+    };
+  }
+
+  function syncLabels(p){
+    els.vA.textContent = p.automation;
+    els.vV.textContent = p.verification;
+    els.vT.textContent = p.transparency;
+    els.vX.textContent = p.accessibility;
+    els.vS.textContent = p.stakes;
+    els.vD.textContent = p.dataSensitivity;
+    els.vH.textContent = p.hallucination;
+  }
+
+  function render(){
+    const p = readParams();
+    syncLabels(p);
+    const s = computeScores(p);
+
+    els.riskScore.textContent = Math.round(s.ethicalRisk);
+    els.riskLabel.textContent = riskLabel(s.ethicalRisk);
+
+    // Trade-off chart
+    Plotly.react("tradeoffChart", [{
+      type: "bar",
+      x: s.positives.map(d => d[0]),
+      y: s.positives.map(d => d[1])
+    }], {
+      margin: {t: 10, l: 40, r: 10, b: 60},
+      yaxis: {range: [0,1], title: "Score (0–1)"},
+      xaxis: {tickangle: -20}
+    }, {displayModeBar: false});
+
+    // Risk chart
+    Plotly.react("riskChart", [{
+      type: "bar",
+      x: s.risks.map(d => d[0]),
+      y: s.risks.map(d => d[1])
+    }], {
+      margin: {t: 10, l: 40, r: 10, b: 60},
+      yaxis: {range: [0,1], title: "Risk (0–1)"},
+      xaxis: {tickangle: -20}
+    }, {displayModeBar: false});
+
+    // Group chart
+    Plotly.react("groupChart", [{
+      type: "bar",
+      x: s.groups.map(d => d[0]),
+      y: s.groups.map(d => d[1])
+    }], {
+      margin: {t: 10, l: 40, r: 10, b: 40},
+      yaxis: {range: [0,1], title: "Outcome (0–1)"}
+    }, {displayModeBar: false});
+  }
+
+  ["automation","verification","transparency","accessibility","stakes","dataSensitivity","hallucination"]
+    .forEach(id => document.getElementById(id).addEventListener("input", render));
+
+  render();
+</script>
+</body>
+</html>
